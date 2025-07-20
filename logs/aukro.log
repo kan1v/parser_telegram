@@ -1,0 +1,15 @@
+2025-07-21 00:34:02,282 | INFO | Открываем Aukro: https://aukro.cz/vysledky-vyhledavani?text=Toyen&searchAll=true&categoryId=8466&searchRedirectDisabled=true&subbrand=BAZAAR
+2025-07-21 00:34:29,873 | ERROR | ❌ Ошибка при обработке Aukro: Page.evaluate: Target page, context or browser has been closed
+2025-07-21 00:35:28,044 | INFO | Открываем Aukro: https://aukro.cz/vysledky-vyhledavani?text=Harry Potter&searchAll=true&categoryId=8466&searchRedirectDisabled=true&subbrand=BAZAAR
+2025-07-21 00:35:43,403 | ERROR | ❌ Ошибка при обработке Aukro: Page.goto: Target page, context or browser has been closed
+Call log:
+  - navigating to "https://aukro.cz/vysledky-vyhledavani?text=Harry%20Potter&searchAll=true&categoryId=8466&searchRedirectDisabled=true&subbrand=BAZAAR", waiting until "domcontentloaded"
+
+2025-07-21 00:50:04,697 | INFO | Открываем Aukro: https://aukro.cz/vysledky-vyhledavani?text=Harry%20Potter&searchAll=true&categoryId=8466&searchRedirectDisabled=true&subbrand=BAZAAR
+2025-07-21 00:50:22,900 | INFO | Открываем Aukro: https://aukro.cz/vysledky-vyhledavani?text=Harry%20Potter&searchAll=true&categoryId=8466&searchRedirectDisabled=true&subbrand=BAZAAR
+2025-07-21 00:52:26,886 | INFO | Открываем Aukro: https://aukro.cz/vysledky-vyhledavani?text=Harry%20Potter&searchAll=true&categoryId=8466&searchRedirectDisabled=true&subbrand=BAZAAR
+2025-07-21 00:53:59,484 | INFO | Открываем Aukro: https://aukro.cz/vysledky-vyhledavani?text=Harry%20Potter&searchAll=true&categoryId=8466&searchRedirectDisabled=true&subbrand=BAZAAR
+2025-07-21 00:54:59,447 | INFO | Открываем Aukro: https://aukro.cz/vysledky-vyhledavani?text=Harry%20Potter&searchAll=true&categoryId=8466&searchRedirectDisabled=true&subbrand=BAZAAR
+2025-07-21 00:56:24,283 | INFO | Открываем Aukro: https://aukro.cz/vysledky-vyhledavani?text=Harry%20Potter&searchAll=true&categoryId=8466&searchRedirectDisabled=true&subbrand=BAZAAR
+2025-07-21 00:57:38,551 | INFO | Открываем Aukro: https://aukro.cz/vysledky-vyhledavani?text=Harry Potter&searchAll=true&categoryId=8466&searchRedirectDisabled=true&subbrand=BAZAAR
+2025-07-21 00:57:56,846 | ERROR | ❌ Ошибка при обработке Aukro: Page.evaluate: Target page, context or browser has been closed
