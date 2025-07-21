@@ -1,5 +1,5 @@
 from playwright.async_api import async_playwright
-from utils import get_random_proxy, get_random_user_agent
+from utils import get_random_user_agent, get_random_proxy
 import urllib.parse
 import time
 
@@ -20,7 +20,6 @@ if not logger.hasHandlers():
     logger.addHandler(logging.StreamHandler())
 
 async def search_vinted(keyword: str):
-    user_agent = get_random_user_agent()
     found_links = []
 
     encoded_keyword = urllib.parse.quote(keyword)
@@ -33,7 +32,17 @@ async def search_vinted(keyword: str):
     logger.info(f"Открываем Vinted: {base_url}")
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        user_agent = get_random_user_agent()
+        proxy = get_random_proxy()
+        launch_args = {"headless": True}
+        if proxy:
+            launch_args["proxy"] = {
+            "server": proxy["server"],
+            "username": proxy["username"],
+            "password": proxy["password"]
+        }
+            
+        browser = await p.chromium.launch(**launch_args)
         context = await browser.new_context(user_agent=user_agent)
         page = await context.new_page()
 

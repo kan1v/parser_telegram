@@ -2,43 +2,39 @@ import random
 import json
 import os
 
-from config import HEADERS
+from config import HEADERS, PROXIES
+from urllib.parse import urlparse
 
 def get_random_user_agent():
     return random.choice(HEADERS)
 
 def get_random_proxy():
-    from config import PROXIES
-    return random.choice(PROXIES) if PROXIES else None
+    return random.choice(PROXIES)
 
-import json
-import os
-
-def load_seen_links(filepath):
-    if not os.path.exists(filepath):
-        # Файл ещё не создан — возвращаем пустой словарь и id=0
-        return {}, 0
-    
+def load_seen_links(filename: str):
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
-            content = f.read().strip()
-            if not content:
-                # Пустой файл — возвращаем пустой словарь и id=0
-                return {}, 0
-            
-            data = json.loads(content)
-            seen_links = {int(item["id"]): item["link"] for item in data}
-            last_id = max(seen_links.keys()) if seen_links else 0
-            return seen_links, last_id
+        with open(filename, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            seen = set(data.get("seen", []))
+            last_id = data.get("last_id", None)
+            return seen, last_id
+    except FileNotFoundError:
+        return set(), None
     except Exception as e:
-        print(f"⚠️ Ошибка при загрузке {filepath}: {e}")
-        return {}, 0
+        print(f"Ошибка загрузки файла {filename}: {e}")
+        return set(), None
 
-def save_seen_links(filepath, seen_links: dict):
-    # Записываем текущие ссылки в файл в формате JSON
-    data = [{"id": k, "link": v} for k, v in seen_links.items()]
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+def save_seen_links(filename: str, seen_links: set, last_id):
+    try:
+        data = {
+            "seen": list(seen_links),
+            "last_id": last_id
+        }
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Ошибка сохранения файла {filename}: {e}")
+
 
 def load_keywords(filepath):
     with open(filepath, "r", encoding="utf-8") as f:

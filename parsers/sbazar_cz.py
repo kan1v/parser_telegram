@@ -1,6 +1,6 @@
 from playwright.async_api import async_playwright
 import urllib.parse
-from utils import get_random_user_agent
+from utils import get_random_user_agent, get_random_proxy
 
 import os
 import logging
@@ -57,14 +57,23 @@ async def auto_scroll(page, pause=1500, max_empty_scrolls=3):
 
 
 async def search_sbazar(keyword: str):
-    user_agent = get_random_user_agent()
     found_links = []
     encoded_keyword = urllib.parse.quote(keyword)
     base_url = f"https://www.sbazar.cz/hledej/{encoded_keyword}/31-knihy-literatura"
     logger.info(f"Открываем Sbazar: {base_url}")
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        user_agent = get_random_user_agent()
+        proxy = get_random_proxy()
+        launch_args = {"headless": True}
+        if proxy:
+            launch_args["proxy"] = {
+            "server": proxy["server"],
+            "username": proxy["username"],
+            "password": proxy["password"]
+        }
+
+        browser = await p.chromium.launch(**launch_args)
         context = await browser.new_context()
         page = await context.new_page()
         await page.set_extra_http_headers({"User-Agent": user_agent})
