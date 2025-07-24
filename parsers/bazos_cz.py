@@ -1,7 +1,6 @@
 from playwright.async_api import async_playwright
-from utils import get_random_user_agent, get_random_proxy
+from utils import get_random_user_agent, get_rotated_proxy
 import urllib.parse
-
 import logging
 import os
 
@@ -17,18 +16,19 @@ if not logger.hasHandlers():
     logger.addHandler(fh)
     logger.addHandler(logging.StreamHandler())
 
+
 async def search_bazos(keyword: str):
-    found_links = []
+    found_links = set()  # ⚠️ используем set для устранения дублей
 
     async with async_playwright() as p:
         user_agent = get_random_user_agent()
-        proxy = get_random_proxy()
+        proxy = get_rotated_proxy(keyword)
+        logger.info(f"🌐 Прокси: {proxy['server']}")
 
         launch_args = {"headless": True}
         if proxy:
-            # Прокси SOCKS5 с аутентификацией
             launch_args["proxy"] = {
-                "server": proxy["server"],      
+                "server": proxy["server"],
                 "username": proxy.get("username"),
                 "password": proxy.get("password"),
             }
@@ -37,23 +37,30 @@ async def search_bazos(keyword: str):
         context = await browser.new_context(user_agent=user_agent)
         page = await context.new_page()
 
-        encoded_keyword = urllib.parse.quote(keyword)
-        search_url = f"https://knihy.bazos.cz/inzeraty/{encoded_keyword}/"
-        logger.info(f"Открываем Bazos: {search_url}")
-        await page.goto(search_url, timeout=60000)
+        try:
+            encoded_keyword = urllib.parse.quote(keyword)
+            search_url = f"https://knihy.bazos.cz/inzeraty/{encoded_keyword}/"
+            logger.info(f"🔍 Открываем Bazos: {search_url}")
+            await page.goto(search_url, timeout=50000)
 
-        items = await page.query_selector_all("div.inzeratynadpis")
-        if not items:
-            logger.info(f"⚠️ Не найдено элементов div.inzeratynadpis для ключа '{keyword}'")
+            items = await page.query_selector_all("div.inzeratynadpis")
+            if not items:
+                logger.warning(f"⚠️ Не найдено элементов div.inzeratynadpis по ключу '{keyword}'")
 
-        for item in items:
-            link_handle = await item.query_selector("a")
-            if link_handle:
-                href = await link_handle.get_attribute("href")
-                if href:
-                    url = "https://knihy.bazos.cz" + href
-                    found_links.append(url)
+            for item in items[:15]:
+                link_handle = await item.query_selector("a")
+                if link_handle:
+                    href = await link_handle.get_attribute("href")
+                    if href:
+                        url = "https://knihy.bazos.cz" + href.strip()
+                        found_links.add(url.lower())
 
-        await browser.close()
-        logger.info(f"🔍 По ключу '{keyword}' найдено {len(found_links)} ссылок")
-        return found_links
+        except Exception as e:
+            logger.error(f"❌ Ошибка при обработке Bazos: {e}")
+
+        finally:
+            await browser.close()
+
+    links = list(found_links)
+    logger.info(f"✅ [Bazos] По ключу '{keyword}' найдено {len(links)} уникальных ссылок")
+    return links

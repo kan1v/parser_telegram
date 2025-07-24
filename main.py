@@ -1,18 +1,28 @@
 import asyncio
-import random
 import logging
 import os
+import random
 
-from utils import load_keywords, load_seen_links, save_seen_links
+from utils import (
+    load_keywords,
+    load_seen_links,
+    save_seen_links,
+    normalize_link,
+)
 from config import KEYWORDS_FILE, SEEN_LINKS_FILE
 from parsers.bazos_cz import search_bazos
 from parsers.vinted_cz import search_vinted
 from parsers.sbazar_cz import search_sbazar
 from parsers.aukro_cz import search_aukro
-from telegram_bot import send_to_telegram, run_bot  # run_bot должен быть функцией, которая запускает start_polling
+from telegram_bot import send_to_telegram, run_bot, stop_parsing
 
-MAX_CONCURRENT_TASKS = 20
-semaphore = asyncio.Semaphore(MAX_CONCURRENT_TASKS)
+# 👇 Семафоры по сайтам
+SEMAPHORES = {
+    "aukro": asyncio.Semaphore(7),
+    "bazos": asyncio.Semaphore(5),
+    "sbazar": asyncio.Semaphore(7),
+    "vinted": asyncio.Semaphore(7),
+}
 
 LOG_DIR = "logs"
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -26,17 +36,16 @@ if not logger.hasHandlers():
     logger.addHandler(fh)
     logger.addHandler(logging.StreamHandler())
 
-seen_links_store = {}
-last_id_store = {}
+# Хранилище просмотренных ссылок
+seen_links_store: dict[str, set[str]] = {}
 
+# Карта парсеров
 PARSERS = {
     "bazos": search_bazos,
     "vinted": search_vinted,
     "sbazar": search_sbazar,
     "aukro": search_aukro,
 }
-
-MAX_LINKS_PER_MESSAGE = 30
 
 
 async def send_links_separately(links: list[str], site: str, keyword: str):
@@ -48,75 +57,85 @@ async def send_links_separately(links: list[str], site: str, keyword: str):
             logger.error(f"❌ Ошибка отправки в Telegram: {e}")
 
 
-def normalize_link(link: str) -> str:
-    return link.strip().lower()
-
-
-async def process_keyword(site: str, keyword: str, func):
+async def process_keyword(site: str, keyword: str, func, sema: asyncio.Semaphore):
     try:
-        async with semaphore:
-            seen_links = seen_links_store.get(site, set())
-            last_id = last_id_store.get(site)
+        if stop_parsing:
+            logger.warning(f"[{site}] Пропущен ключ '{keyword}' из-за замены keywords.txt")
+            return
 
+        async with sema:
+            await asyncio.sleep(random.uniform(1.2, 2.8))  # ⏱️ антиспам-задержка
+
+            seen_links = seen_links_store.get(site, set())
             links = await func(keyword)
             normalized_links = [normalize_link(link) for link in links]
-            normalized_seen = set(normalize_link(link) for link in seen_links)
 
-            new_links = [link for link in normalized_links if link not in normalized_seen]
+            new_links = [link for link in normalized_links if link not in seen_links]
 
-            logger.info(f"[{site}] По ключу '{keyword}': всего ссылок с сайта: {len(links)}")
+            logger.info(f"[{site}] По ключу '{keyword}': всего ссылок: {len(links)}")
             logger.info(f"[{site}] Уже просмотрено: {len(seen_links)}")
             logger.info(f"[{site}] Новых ссылок: {len(new_links)}")
 
             if new_links:
                 await send_links_separately(new_links, site, keyword)
                 logger.info(f"✅ Отправлено {len(new_links)} новых ссылок по ключу '{keyword}' ({site})")
-
                 seen_links.update(new_links)
-                last_id = new_links[-1]
+                save_seen_links(SEEN_LINKS_FILE[site], seen_links)
 
-                save_seen_links(SEEN_LINKS_FILE[site], seen_links, last_id)
-                seen_links_store[site] = seen_links
-                last_id_store[site] = last_id
-            else:
-                logger.info(f"ℹ️ По ключу '{keyword}' на сайте '{site}' новых ссылок нет.")
+            # Обновляем хранилище в любом случае
+            seen_links_store[site] = seen_links
 
     except Exception as e:
         logger.error(f"❌ Ошибка при обработке ключа '{keyword}' на {site}: {e}")
 
 
-async def start_parsers_loop():
-    while True:
-        await start_parsers()
-        logger.info("⏰ Ожидаем 60 секунд перед следующим запуском...")
-        await asyncio.sleep(60)
+async def run_for_site(site, search_func):
+    logger.info(f"▶️ Обработка сайта {site.upper()}")
+
+    seen_links = load_seen_links(SEEN_LINKS_FILE[site])
+    seen_links_store[site] = seen_links
+
+    keywords = load_keywords(KEYWORDS_FILE)
+    sema = SEMAPHORES[site]
+
+    batch_size = 30
+    for i in range(0, len(keywords), batch_size):
+        batch = keywords[i:i + batch_size]
+        logger.info(f"[{site}] 🔄 Обработка батча {i // batch_size + 1}/{(len(keywords)-1)//batch_size+1}")
+
+        tasks = [
+            asyncio.create_task(process_keyword(site, kw, search_func, sema))
+            for kw in batch
+        ]
+        await asyncio.gather(*tasks)
+        await asyncio.sleep(3)  # ⏸️ Пауза между батчами
+
+    logger.info(f"[{site}] ✅ Завершена обработка {len(keywords)} ключей")
 
 
 async def start_parsers():
-    global seen_links_store, last_id_store
+    logger.info("🚀 Старт парсинга по всем сайтам")
 
-    logger.info("🚀 Запуск парсеров...")
+    await asyncio.gather(*[
+        run_for_site(site, func) for site, func in PARSERS.items()
+    ])
 
-    keywords = load_keywords(KEYWORDS_FILE)
-    tasks = []
+    logger.info("📊 Парсинг завершён по всем сайтам.")
 
-    for site, search_func in PARSERS.items():
-        seen_links, last_id = load_seen_links(SEEN_LINKS_FILE[site])
-        seen_links_store[site] = seen_links
-        last_id_store[site] = last_id
 
-        for keyword in keywords:
-            logger.info(f"🔄 Обработка: {site} | Ключ: '{keyword}'")
-            tasks.append(asyncio.create_task(process_keyword(site, keyword, search_func)))
-
-    await asyncio.gather(*tasks)
+async def start_parsers_loop():
+    while True:
+        await start_parsers()
+        logger.info("⏰ Ожидание 60 сек перед следующим циклом...")
+        await asyncio.sleep(60)
 
 
 async def main():
     await asyncio.gather(
-        start_parsers_loop(),  # запускаем парсеры в цикле
-        run_bot(),             # запускаем бота отдельно
+        start_parsers_loop(),
+        run_bot(),
     )
+
 
 if __name__ == "__main__":
     try:

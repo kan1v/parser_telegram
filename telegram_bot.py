@@ -82,6 +82,7 @@ async def admin_cmd(message: types.Message):
 async def start_messages(callback: types.CallbackQuery):
     set_user_status(callback.from_user.id, True)
     await callback.answer("✅ Сообщения включены")
+    logger.info("✅ Отправка сообщений включена в телеграмм бота")
     # Можно уведомить, что сейчас сообщения включены
 
 
@@ -89,6 +90,7 @@ async def start_messages(callback: types.CallbackQuery):
 async def stop_messages(callback: types.CallbackQuery):
     set_user_status(callback.from_user.id, False)
     await callback.answer("⛔️ Сообщения выключены")
+    logger.info("⛔️ Отправка сообщений в телеграмм бота выключена")
     # Можно уведомить, что сообщения отключены
 
 
@@ -150,25 +152,39 @@ async def save_new_keyword(message: types.Message, state: FSMContext):
     await state.clear()
 
 
+# Путь к файлу ключевых слов
+KEYWORDS_FILE_PATH = "parsers/keywords.txt"
+
+# Флаг остановки парсинга
+stop_parsing = False
+
 class ImportKeywordState(StatesGroup):
     waiting_for_file = State()
 
 @dp.callback_query(lambda c: c.data == 'import_keywords_data')
 async def prompt_import_keywords(callback: types.CallbackQuery, state: FSMContext):
-    logger.info("Начало добавления файла с ключевыми словами")
+    global stop_parsing
+    stop_parsing = True  # Остановить все рассылки
     await callback.message.answer("📎 Пожалуйста, отправьте .txt файл с ключевыми словами.")
     await state.set_state(ImportKeywordState.waiting_for_file)
 
 @dp.message(ImportKeywordState.waiting_for_file)
 async def handle_imported_file(message: types.Message, state: FSMContext):
-    if not message.document:
-        await message.answer("❌ Пожалуйста, отправьте файл формата .txt.")
+    global stop_parsing
+    document = message.document
+
+    if not document or not document.file_name.endswith(".txt"):
+        await message.answer("❌ Пожалуйста, отправьте .txt файл.")
         return
 
-    document = message.document
-    if not document.file_name.endswith(".txt"):
-        await message.answer("❌ Поддерживаются только .txt файлы.")
-        return
+    os.makedirs("parsers", exist_ok=True)
+
+    file = await message.bot.get_file(document.file_id)
+    await message.bot.download_file(file.file_path, destination=KEYWORDS_FILE_PATH)
+
+    await message.answer("✅ Файл успешно загружен и заменён.")
+    stop_parsing = False  # Снова можно начинать парсинг
+    await state.clear()
 
 
 
@@ -179,9 +195,9 @@ async def run_bot():
 
 
 # ========= Возможность запуска как скрипт =========
-# if __name__ == "__main__":
-#     try:
-#         asyncio.run(run_bot())
-#     except (KeyboardInterrupt, SystemExit):
-#         print("🛑 Бот остановлен вручную")
+if __name__ == "__main__":
+    try:
+        asyncio.run(run_bot())
+    except (KeyboardInterrupt, SystemExit):
+        print("🛑 Бот остановлен вручную")
 
